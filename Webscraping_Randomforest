@@ -1,0 +1,175 @@
+from bs4 import BeautifulSoup
+import requests
+import pandas as pd
+import missingno as msno
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+url="https://www.hithorizons.com/eu/insights/understanding-the-german-market-through-B2B-data"
+r=requests.get(url)
+print(r)
+
+headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'TE': 'Trailers',
+}
+response = requests.get(url, headers=headers)
+
+
+if response.status_code == 200:
+    html_content = response.text
+    
+    # Parse the HTML content
+    soup = BeautifulSoup(html_content, 'lxml')
+    
+    # Find the table with the specific class
+    table = soup.find("table", class_="table table-striped rank-table")
+    
+    # Print the table if found
+    if table:
+        print(table)
+    else:
+        print("Table not found")
+else:
+    print(f"Failed to retrieve the webpage. Status code: {response.status_code}")
+
+
+headers=table.find_all("thead")
+print(headers)
+
+titles=[]
+for i in headers:
+    title=i.text
+    titles.append(title)
+print(title)
+
+df=pd.DataFrame(columns=titles)
+print(df)
+
+
+# Find all rows in the table
+rows = table.find_all('tr')
+
+# List to store all rows' data
+all_rows = []
+
+# Loop through each row (skipping the header row)
+for row in rows[1:]:
+    # Find all <td> elements within the row
+    data = row.find_all('td')
+    
+    # Extract text from each <td> element and store in a list
+    row_data = [td.text.strip() for td in data]
+    
+    # Append the row data to the list of all rows
+    all_rows.append(row_data)
+
+# Print all rows (optional)
+print(all_rows)
+
+# Convert the list of rows to a DataFrame
+df = pd.DataFrame(all_rows, columns=['Industries', 'Corporations', 'Proprietorships','Corporations','Proprietorships'])
+
+# Print the DataFrame (optional)
+print(df)
+
+# Get the length of the DataFrame
+l = len(df)
+
+# Add the new row(s) to the DataFrame
+for row in all_rows:
+    df.loc[l] = row
+    l += 1
+
+# Print the updated DataFrame
+print(df)
+
+df.to_csv("Germany_industry.csv")
+
+new_column_names = ['Industries', 'Corporations', 'Corporations%', 'Proprietorships', 'Proprietorships%']
+
+
+df.columns = new_column_names
+df
+
+df.info()
+
+df["Industries"].unique()
+
+df_without_duplicatedvalues = df.drop_duplicates()
+
+
+df_without_duplicatedvalues.to_csv('datos_sin_duplicados.csv', index=False)
+df_without_duplicatedvalues
+
+#searching and errasing nans 1
+import missingno as msno
+msno.matrix(df_without_duplicatedvalues)
+plt.show()
+
+#searching and errasing nans 1
+msno.bar(df_without_duplicatedvalues)
+plt.show()
+
+df_without_duplicatedvalues.describe()
+
+df_without_duplicatedvalues=df_without_duplicatedvalues.drop(index=10)
+df_without_duplicatedvalues
+
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+
+
+
+df_without_duplicatedvalues = pd.DataFrame(df_without_duplicatedvalues)
+categorical_features = ['Industries', 'Corporations', 'Corporations%', 'Proprietorships', 'Proprietorships%']
+
+onehot = OneHotEncoder()
+
+# Create the ColumnTransformer
+transformer = ColumnTransformer(
+    [('onehot', onehot, categorical_features)],
+    remainder='passthrough'
+)
+
+# Fit and transform the data
+transformed_data = transformer.fit_transform(df_without_duplicatedvalues)
+
+if hasattr(transformed_data, "toarray"):
+    transformed_data = transformed_data.toarray()
+
+# Convert transformed data to DataFrame for better readability
+transformed_df = pd.DataFrame(transformed_data)
+
+# Display the transformed DataFrame
+print(transformed_df)
+
+transformed_df.info()
+
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+
+# Define your target variable
+y = df_without_duplicatedvalues['Industries']
+
+# Define your feature set
+X = transformed_df
+
+# Split the data into training and testing sets
+x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize the RandomForestClassifier
+rf = RandomForestClassifier()
+
+# Fit the model
+rf.fit(x_train, y_train)
+
+# (Optional) Evaluate the model
+accuracy = rf.score(x_test, y_test)
+print(f"Accuracy: {accuracy:.2f}")
